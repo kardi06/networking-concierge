@@ -6,6 +6,7 @@ import { loggerModule } from './common/logger/logger.config';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { EventsModule } from './events/events.module';
+import { EmbeddingModule } from './embedding/embedding.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 @Module({
@@ -23,6 +24,7 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
     }),
     loggerModule,
     PrismaModule,
+    EmbeddingModule,
     HealthModule,
     EventsModule,
   ],
