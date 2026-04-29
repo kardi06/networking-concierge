@@ -45,3 +45,7 @@ desktop.ini
 
 # --- Internal execution scratch (not for submission) ---
 docs/task/
+
+# --- Claude Code local config ---
+.claude/
+CLAUDE.md

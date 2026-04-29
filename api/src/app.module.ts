@@ -4,6 +4,7 @@ import { APP_FILTER } from '@nestjs/core';
 import { envValidationSchema } from './config/env.validation';
 import { loggerModule } from './common/logger/logger.config';
 import { HealthModule } from './health/health.module';
+import { PrismaModule } from './prisma/prisma.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 @Module({
@@ -20,6 +21,7 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
       },
     }),
     loggerModule,
+    PrismaModule,
     HealthModule,
   ],
   providers: [

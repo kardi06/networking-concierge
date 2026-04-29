@@ -1,0 +1,130 @@
+// MyConnect Networking Concierge — Prisma schema
+// See docs/ARCHITECTURE.md §3 for the data model rationale.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  extensions = [vector]
+}
+
+// =============================================================================
+// Event — top-level container for attendees and conversations.
+// =============================================================================
+model Event {
+  id        String   @id @default(uuid()) @db.Uuid
+  title     String
+  startsAt  DateTime @map("starts_at")
+  endsAt    DateTime @map("ends_at")
+  location  String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  attendees     Attendee[]
+  conversations Conversation[]
+
+  @@map("events")
+}
+
+// =============================================================================
+// Attendee — a registered person at an event with profile + embedding.
+// `embedding` is a pgvector(1536) column, not natively typed by Prisma.
+// We treat it as `Unsupported`; reads/writes go through raw SQL with `Prisma.sql`.
+// =============================================================================
+model Attendee {
+  id         String                       @id @default(uuid()) @db.Uuid
+  eventId    String                       @map("event_id") @db.Uuid
+  name       String
+  headline   String
+  bio        String                       @db.Text
+  company    String
+  role       String
+  skills     String[]
+  lookingFor String                       @map("looking_for") @db.Text
+  openToChat Boolean                      @default(true) @map("open_to_chat")
+  embedding  Unsupported("vector(1536)")?
+  createdAt  DateTime                     @default(now()) @map("created_at")
+
+  event         Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+
+  @@index([eventId])
+  @@index([role])
+  @@index([skills], type: Gin)
+  @@map("attendees")
+}
+
+// =============================================================================
+// Conversation — one per (event, attendee). Holds the agent state.
+// =============================================================================
+model Conversation {
+  id         String   @id @default(uuid()) @db.Uuid
+  eventId    String   @map("event_id") @db.Uuid
+  attendeeId String   @map("attendee_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  event    Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  attendee Attendee  @relation(fields: [attendeeId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@unique([eventId, attendeeId])
+  @@map("conversations")
+}
+
+// =============================================================================
+// Message — one row per turn in the conversation.
+// `content` stores either a string (user) or an Anthropic content-block array
+// (assistant with tool_use, tool result blocks). `metadata` stores telemetry.
+// =============================================================================
+model Message {
+  id             String   @id @default(uuid()) @db.Uuid
+  conversationId String   @map("conversation_id") @db.Uuid
+  role           String // 'user' | 'assistant' | 'tool'
+  content        Json
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  toolCalls    ToolCall[]
+  feedback     Feedback?
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+// =============================================================================
+// ToolCall — one row per tool invocation by the agent.
+// =============================================================================
+model ToolCall {
+  id        String   @id @default(uuid()) @db.Uuid
+  messageId String   @map("message_id") @db.Uuid
+  toolName  String   @map("tool_name")
+  input     Json
+  output    Json?
+  errorText String?  @map("error_text")
+  latencyMs Int      @map("latency_ms")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+  @@map("tool_calls")
+}
+
+// =============================================================================
+// Feedback — one rating per assistant message.
+// =============================================================================
+model Feedback {
+  id        String   @id @default(uuid()) @db.Uuid
+  messageId String   @unique @map("message_id") @db.Uuid
+  rating    Int
+  notes     String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@map("feedback")
+}
