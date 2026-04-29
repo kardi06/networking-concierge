@@ -5,11 +5,21 @@ import type OpenAI from 'openai';
 describe('EmbeddingService', () => {
   let service: EmbeddingService;
   let client: { embeddings: { create: jest.Mock } };
-  let logger: { info: jest.Mock; warn: jest.Mock; error: jest.Mock };
+  let logger: {
+    info: jest.Mock;
+    warn: jest.Mock;
+    error: jest.Mock;
+    setContext: jest.Mock;
+  };
 
   beforeEach(() => {
     client = { embeddings: { create: jest.fn() } };
-    logger = { info: jest.fn(), warn: jest.fn(), error: jest.fn() };
+    logger = {
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      setContext: jest.fn(),
+    };
     service = new EmbeddingService(
       client as unknown as OpenAI,
       logger as unknown as PinoLogger,
