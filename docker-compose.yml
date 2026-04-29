@@ -1,0 +1,36 @@
+# =============================================================================
+# MyConnect Networking Concierge — local development stack
+#
+# Phase 1: only `postgres` is defined.
+# `api` (NestJS) is added in Phase 14.
+# `score-service` (FastAPI) is added in Phase 8.
+#
+# Usage:
+#   docker compose up -d postgres        # just the database
+#   docker compose --profile full up -d  # full stack (after api/score-service exist)
+# =============================================================================
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: myconnect-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: myconnect
+    ports:
+      # Host 5433 -> container 5432 (host 5432 is taken by native Postgres on this machine).
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d myconnect"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  postgres_data:
+    name: myconnect-postgres-data
