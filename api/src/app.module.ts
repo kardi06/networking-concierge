@@ -10,6 +10,9 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      // Try repo root first (local dev), fall back to api/ (docker-compose where
+      // env vars typically come from `environment:` directly, not from a file).
+      envFilePath: ['../.env', '.env'],
       validationSchema: envValidationSchema,
       validationOptions: {
         abortEarly: false,

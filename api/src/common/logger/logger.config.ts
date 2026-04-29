@@ -1,6 +1,6 @@
 import { LoggerModule } from 'nestjs-pino';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import type { IncomingMessage } from 'http';
 
 export const loggerModule = LoggerModule.forRootAsync({
@@ -34,7 +34,7 @@ export const loggerModule = LoggerModule.forRootAsync({
           if (Array.isArray(fromHeader) && fromHeader[0]) {
             return fromHeader[0];
           }
-          return uuidv4();
+          return randomUUID();
         },
 
         // Redact PII at info level. PII fields per ARCHITECTURE §8.2.
