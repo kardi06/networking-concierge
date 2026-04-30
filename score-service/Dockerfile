@@ -10,11 +10,13 @@ RUN pip install --no-cache-dir uv
 
 WORKDIR /app
 
-# Copy dependency manifest first so docker can cache the install layer.
-COPY pyproject.toml ./
-COPY uv.lock* ./
+# Copy dependency manifest + README (hatchling validates readme field).
+COPY pyproject.toml uv.lock* README.md ./
 
-RUN uv sync --frozen --no-dev || uv sync --no-dev
+# `--no-install-project` installs deps only, skips building this package as
+# editable. Project code is copied below and run via `uv run`.
+RUN uv sync --frozen --no-dev --no-install-project \
+    || uv sync --no-dev --no-install-project
 
 # Copy application code.
 COPY app ./app
@@ -30,4 +32,6 @@ HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8000/health').status == 200 else sys.exit(1)" \
     || exit 1
 
-CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run uvicorn from the venv directly. `uv run` would need a writable cache dir
+# at $HOME/.cache/uv, which doesn't exist for appuser (--no-create-home).
+CMD [".venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

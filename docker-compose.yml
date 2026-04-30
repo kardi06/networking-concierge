@@ -1,13 +1,12 @@
 # =============================================================================
 # MyConnect Networking Concierge — local development stack
 #
-# Phase 1: only `postgres` is defined.
-# `api` (NestJS) is added in Phase 14.
-# `score-service` (FastAPI) is added in Phase 8.
+# Profiles:
+#   (default)  postgres only          — `docker compose up -d`
+#   full       postgres + api + score — `docker compose --profile full up -d`
+#   tools      pgadmin                — `docker compose --profile tools up -d`
 #
-# Usage:
-#   docker compose up -d postgres        # just the database
-#   docker compose --profile full up -d  # full stack (after api/score-service exist)
+# Combine: `docker compose --profile full --profile tools up -d`
 # =============================================================================
 
 services:
@@ -31,6 +30,77 @@ services:
       retries: 10
       start_period: 10s
 
+  score-service:
+    build:
+      context: ./score-service
+      dockerfile: Dockerfile
+    image: myconnect-score-service:local
+    container_name: myconnect-score-service
+    profiles: ["full"]
+    restart: unless-stopped
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    image: myconnect-api:local
+    container_name: myconnect-api
+    profiles: ["full"]
+    restart: unless-stopped
+    environment:
+      # Inside the compose network, services reach Postgres as `postgres:5432`.
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/myconnect?schema=public
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      SCORE_SERVICE_URL: http://score-service:8000
+      PORT: 3000
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      RATE_LIMIT_PER_MIN: ${RATE_LIMIT_PER_MIN:-10}
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      score-service:
+        condition: service_started
+
+  # ---------------------------------------------------------------------------
+  # pgadmin — DEV ONLY tool. Not included in the `full` profile.
+  # Default credentials: admin@myconnect.local / admin
+  # Once running, add a server: host=postgres, port=5432, db=myconnect,
+  # user=postgres, password=postgres.
+  # ---------------------------------------------------------------------------
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: myconnect-pgadmin
+    profiles: ["tools"]
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@myconnect.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   postgres_data:
     name: myconnect-postgres-data
+  pgadmin_data:
+    name: myconnect-pgadmin-data

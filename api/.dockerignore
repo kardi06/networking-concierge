@@ -1,0 +1,20 @@
+# Don't copy local node_modules — pnpm reinstalls fresh inside the container
+# (and the host structure may differ if you've changed node-linker).
+node_modules
+dist
+coverage
+.pnpm-store
+
+# Local env (use docker-compose `environment:` instead)
+.env
+.env.*
+!.env.example
+
+# Tests + IDE
+.vscode
+.idea
+*.log
+
+# Git
+.git
+.gitignore
