@@ -76,7 +76,7 @@ curl http://localhost:8000/health    # FastAPI score-service
 ```bash
 docker compose --profile tools up -d pgadmin
 # Open http://localhost:5050
-# Login: admin@myconnect.local / admin
+# Login: admin@example.com / admin
 # Add server with host=postgres, port=5432, db=myconnect, user/pass=postgres/postgres
 ```
 
