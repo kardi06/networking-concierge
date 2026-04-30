@@ -1,10 +1,29 @@
 # Product Requirements Document
 ## MyConnect AI Networking Concierge
 
-**Version:** 1.0
+**Version:** 1.1
 **Author:** Kardi Ibrahim
-**Date:** 28 April 2026
-**Status:** Draft for Take-Home Implementation
+**Original date:** 28 April 2026
+**Last updated:** 30 April 2026
+**Status:** Implemented (with documented deviations — see [Implementation Notes](#implementation-notes-v11) below)
+
+---
+
+## Implementation Notes (v1.1)
+
+This PRD was authored on 28 April 2026 *before* implementation. The body of the document below is preserved as the original spec. The following adjustments were made during the build; each is recorded with full rationale in [`TECH-DECISIONS.md`](TECH-DECISIONS.md).
+
+| PRD section | Change | Rationale |
+|---|---|---|
+| §3.3 FR-5 + §4.1 | Concierge timeout **30 s → 90 s** | Measured agent loops with 6 tool calls average ~38 s end-to-end. 30 s rejected real demo turns. [TD-004] |
+| §4.2 Reliability | Idempotency-Key handling **deferred** | The 10/min per-attendee throttle is the practical defence for the take-home. A Redis-backed idempotency window is listed under "what I'd do with more time". [TD-004] |
+| §4.5 Data Protection | PII redaction broadened beyond `name`/`email` | Implementation also redacts `bio`, `looking_for`, and the `authorization` / `cookie` / `x-api-key` request headers. Stricter than originally specified. |
+| §5.2 `score_match` input | `requester_attendee_id` **removed from the LLM-facing tool schema** | Injected server-side from `ToolContext` to prevent the model from hallucinating a different requester. Documented security deviation. |
+| §5.3 `draft_intro_message` input | `from_attendee_id` **removed from the LLM-facing tool schema** | Same rationale as §5.2. |
+| §8 Success Metrics | $0.05 / turn target achievable only with **prompt caching enabled** | Without caching (current implementation), measured cost is ~$0.09/turn. README §7 has the breakdown and §10 lists prompt caching as a planned optimisation. |
+| §7 Out of Scope | Two additional items deferred | Idempotency-Key handling and per-conversation advisory lock — added to §7 below. |
+
+The original §4.1 latency target (p95 < 8 s for the concierge endpoint) is retained as a *product* target; a synchronous 6-tool-call loop cannot meet it without prompt caching, an async queue, and streaming responses. All three are listed in [§13 of `ARCHITECTURE.md`](ARCHITECTURE.md#13-what-i-would-do-with-more-time).
 
 ---
 
@@ -268,6 +287,9 @@ The following items are documented in the README under "what I'd do with more ti
 - Full Terraform IaC and CI/CD pipeline.
 - k6 load test.
 - Multi-language support (English only for now).
+- **Idempotency-Key handling** with a Redis-backed dedupe window (added in v1.1 — see [TD-004](TECH-DECISIONS.md#td-004--defer-idempotency-key--advisory-lock-bump-handler-timeout-to-90-s)).
+- **Per-conversation advisory lock** (`pg_advisory_xact_lock`). The unique constraint on `conversations(event_id, attendee_id)` prevents duplicate conversations; a lock would prevent two concurrent turns for the same attendee from interleaving (added in v1.1).
+- **Anthropic prompt caching** on the system prompt and tool definitions (would cut ~60% of input tokens; needed to hit the §8 cost target).
 
 ---
 
