@@ -24,7 +24,8 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "db:seed": "ts-node prisma/seed.ts",
-    "db:reset": "prisma migrate reset --force && pnpm db:seed"
+    "db:reset": "prisma migrate reset --force && pnpm db:seed",
+    "db:test:setup": "ts-node test/setup-test-db.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",
