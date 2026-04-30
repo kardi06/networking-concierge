@@ -2,10 +2,20 @@ import { Module } from '@nestjs/common';
 import { LlmModule } from '../llm/llm.module';
 import { AttendeesModule } from '../attendees/attendees.module';
 import { ToolExecutorService } from './tools/tool-executor.service';
+import { ConciergeService } from './concierge.service';
+import { ConciergeController } from './concierge.controller';
+import { ConversationsRepository } from './conversations.repository';
+import { AttendeeThrottlerGuard } from './guards/attendee-throttler.guard';
 
 @Module({
   imports: [LlmModule, AttendeesModule],
-  providers: [ToolExecutorService],
-  exports: [ToolExecutorService],
+  controllers: [ConciergeController],
+  providers: [
+    ToolExecutorService,
+    ConciergeService,
+    ConversationsRepository,
+    AttendeeThrottlerGuard,
+  ],
+  exports: [ToolExecutorService, ConciergeService],
 })
 export class ConciergeModule {}

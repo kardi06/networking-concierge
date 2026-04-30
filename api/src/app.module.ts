@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER } from '@nestjs/core';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { envValidationSchema } from './config/env.validation';
 import { loggerModule } from './common/logger/logger.config';
 import { HealthModule } from './health/health.module';
@@ -26,6 +27,17 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
       },
     }),
     loggerModule,
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        throttlers: [
+          {
+            ttl: 60_000, // 1 minute window
+            limit: config.get<number>('RATE_LIMIT_PER_MIN') ?? 10,
+          },
+        ],
+      }),
+    }),
     PrismaModule,
     EmbeddingModule,
     LlmModule,
