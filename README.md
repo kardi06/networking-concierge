@@ -329,7 +329,17 @@ Validation:
 
 ## 3. Architecture Overview
 
-The concierge is a **stateful agent** that uses Anthropic's native tool calling. Each turn loads conversation history from Postgres, runs an agent loop (max 6 iterations) with three tools, persists every assistant message and tool call, and returns a structured `matches` array plus a natural-language reply.
+The concierge is a **stateful AI agent**: every turn loads the prior conversation history from Postgres and reasons over it, so the user can naturally refer back to "the first one you suggested" in turn 2 without re-stating their goal.
+
+The agent has three tools, called via Anthropic's native function calling:
+
+- **`search_attendees`** — semantic search over the attendee embeddings stored in pgvector, with optional `role` / `skills` filters layered on top.
+- **`score_match`** — produces a structured score (0–100), rationale, and concrete shared ground for one candidate against the requester's intent. **This tool is implemented by a separate FastAPI service**, deliberately — it is the most ML-flavoured part of the system and the natural home for a future re-ranking model trained on the feedback ratings the API already collects.
+- **`draft_intro_message`** — composes a personalised intro message from the requester to the recipient using a dedicated prompt and forced structured output.
+
+Each turn runs the agent loop **capped at 6 iterations**. The cap is pinned to the PRD: beyond six rounds the model has either succeeded or is looping; we cut it off and return whatever scored matches we have, plus a natural-language reply.
+
+Every step is persisted: the user message, every assistant response (including `tool_use` content blocks), every tool call (one row per call in `tool_calls`), and every tool result message. This is what makes conversations resumable — the next turn rebuilds the full Anthropic messages array directly from the database (`SELECT * FROM messages WHERE conversation_id = $1 ORDER BY created_at`), no in-memory state to lose on a deploy.
 
 ```mermaid
 sequenceDiagram
