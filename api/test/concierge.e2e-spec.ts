@@ -70,18 +70,16 @@ describe('Concierge (e2e)', () => {
       })
       .overrideProvider(ToolExecutorService)
       .useValue({
-        dispatch: jest.fn(
-          (name: string, input: Record<string, unknown>) => {
-            toolStub.observed.push({ name, input });
-            const next = toolStub.scriptedResults.shift();
-            if (!next) {
-              return Promise.resolve({
-                error: 'tool stub: no more scripted results',
-              } as ToolExecutionResult);
-            }
-            return Promise.resolve(next);
-          },
-        ),
+        dispatch: jest.fn((name: string, input: Record<string, unknown>) => {
+          toolStub.observed.push({ name, input });
+          const next = toolStub.scriptedResults.shift();
+          if (!next) {
+            return Promise.resolve({
+              error: 'tool stub: no more scripted results',
+            } as ToolExecutionResult);
+          }
+          return Promise.resolve(next);
+        }),
       })
       .overrideProvider(EmbeddingService)
       .useClass(MockEmbeddingService)
@@ -244,7 +242,7 @@ describe('Concierge (e2e)', () => {
     expect(llmStub.observed.length).toBeGreaterThan(observedTurn1);
     const llmInputTurn2 = llmStub.observed[llmStub.observed.length - 1];
     // History on turn 2: turn1 user + turn1 assistant + turn2 user = 3 messages.
-    expect((llmInputTurn2.messages as unknown[]).length).toBeGreaterThanOrEqual(3);
+    expect(llmInputTurn2.messages.length).toBeGreaterThanOrEqual(3);
   });
 
   // ---------------------------------------------------------------------------

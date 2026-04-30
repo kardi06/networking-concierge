@@ -10,6 +10,7 @@ import type { LlmService } from '../../llm/llm.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { ConfigService } from '@nestjs/config';
 import type { PinoLogger } from 'nestjs-pino';
+import type { MetricsService } from '../../common/metrics/metrics.service';
 
 const mockedAxios = axios as unknown as { create: jest.Mock };
 
@@ -24,6 +25,7 @@ describe('ToolExecutorService', () => {
     error: jest.Mock;
     setContext: jest.Mock;
   };
+  let metrics: { emit: jest.Mock };
   let config: { getOrThrow: jest.Mock };
   let httpClient: { post: jest.Mock };
 
@@ -45,6 +47,7 @@ describe('ToolExecutorService', () => {
       error: jest.fn(),
       setContext: jest.fn(),
     };
+    metrics = { emit: jest.fn() };
     config = {
       getOrThrow: jest.fn().mockReturnValue('http://localhost:8000'),
     };
@@ -54,6 +57,7 @@ describe('ToolExecutorService', () => {
       llm as unknown as LlmService,
       prisma as unknown as PrismaService,
       logger as unknown as PinoLogger,
+      metrics as unknown as MetricsService,
       config as unknown as ConfigService,
     );
   });

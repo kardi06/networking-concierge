@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PinoLogger } from 'nestjs-pino';
+import { MetricsService } from '../common/metrics/metrics.service';
 
 export const ANTHROPIC_CLIENT = Symbol('ANTHROPIC_CLIENT');
 
@@ -27,6 +28,7 @@ export class LlmService {
   constructor(
     @Inject(ANTHROPIC_CLIENT) private readonly client: Anthropic,
     private readonly logger: PinoLogger,
+    private readonly metrics: MetricsService,
     config: ConfigService,
   ) {
     this.logger.setContext(LlmService.name);
@@ -73,6 +75,16 @@ export class LlmService {
           },
           'llm message generated',
         );
+        this.metrics.emit({
+          name: 'LlmCall',
+          value: latencyMs,
+          unit: 'Milliseconds',
+          dimensions: {
+            model,
+            stop_reason: response.stop_reason ?? 'unknown',
+            status: 'success',
+          },
+        });
         return response;
       } catch (err) {
         lastError = err;
@@ -93,6 +105,12 @@ export class LlmService {
         }
       }
     }
+    this.metrics.emit({
+      name: 'LlmCall',
+      value: 1,
+      unit: 'Count',
+      dimensions: { model, status: 'failed' },
+    });
     throw lastError instanceof Error
       ? lastError
       : new Error('llm call failed after retries');

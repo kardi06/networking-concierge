@@ -7,6 +7,7 @@ import { Attendee } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AttendeeSearchService } from '../../attendees/attendee-search.service';
 import { LlmService } from '../../llm/llm.service';
+import { MetricsService } from '../../common/metrics/metrics.service';
 import {
   INTRO_DRAFTER_SYSTEM_PROMPT,
   INTRO_DRAFTER_TOOL,
@@ -34,6 +35,7 @@ export class ToolExecutorService {
     private readonly llm: LlmService,
     private readonly prisma: PrismaService,
     private readonly logger: PinoLogger,
+    private readonly metrics: MetricsService,
     config: ConfigService,
   ) {
     this.logger.setContext(ToolExecutorService.name);
@@ -54,6 +56,7 @@ export class ToolExecutorService {
     ctx: ToolContext,
   ): Promise<ToolExecutionResult> {
     const start = Date.now();
+    let status: 'success' | 'failed' | 'unknown' = 'success';
     try {
       switch (name) {
         case 'search_attendees':
@@ -63,17 +66,26 @@ export class ToolExecutorService {
         case 'draft_intro_message':
           return { result: await this.draftIntroMessage(input, ctx) };
         default:
+          status = 'unknown';
           return { error: `unknown tool: ${name}` };
       }
     } catch (err) {
+      status = 'failed';
       const message = err instanceof Error ? err.message : String(err);
       this.logger.warn({ tool: name, error: message }, 'tool execution failed');
       return { error: message };
     } finally {
+      const latencyMs = Date.now() - start;
       this.logger.info(
-        { tool: name, latency_ms: Date.now() - start },
+        { tool: name, latency_ms: latencyMs, status },
         'tool executed',
       );
+      this.metrics.emit({
+        name: 'ToolDispatch',
+        value: latencyMs,
+        unit: 'Milliseconds',
+        dimensions: { tool: name, status },
+      });
     }
   }
 

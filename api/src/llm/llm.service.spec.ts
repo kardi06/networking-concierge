@@ -2,6 +2,7 @@ import { LlmService } from './llm.service';
 import type Anthropic from '@anthropic-ai/sdk';
 import type { ConfigService } from '@nestjs/config';
 import type { PinoLogger } from 'nestjs-pino';
+import type { MetricsService } from '../common/metrics/metrics.service';
 
 describe('LlmService', () => {
   let service: LlmService;
@@ -12,6 +13,7 @@ describe('LlmService', () => {
     error: jest.Mock;
     setContext: jest.Mock;
   };
+  let metrics: { emit: jest.Mock };
   let config: { getOrThrow: jest.Mock };
 
   beforeEach(() => {
@@ -22,12 +24,14 @@ describe('LlmService', () => {
       error: jest.fn(),
       setContext: jest.fn(),
     };
+    metrics = { emit: jest.fn() };
     config = {
       getOrThrow: jest.fn().mockReturnValue('claude-sonnet-4-6'),
     };
     service = new LlmService(
       client as unknown as Anthropic,
       logger as unknown as PinoLogger,
+      metrics as unknown as MetricsService,
       config as unknown as ConfigService,
     );
   });

@@ -11,6 +11,7 @@ import { EmbeddingModule } from './embedding/embedding.module';
 import { AttendeesModule } from './attendees/attendees.module';
 import { LlmModule } from './llm/llm.module';
 import { ConciergeModule } from './concierge/concierge.module';
+import { MetricsModule } from './common/metrics/metrics.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 @Module({
@@ -27,6 +28,7 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
       },
     }),
     loggerModule,
+    MetricsModule,
     ThrottlerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
