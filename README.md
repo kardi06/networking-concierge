@@ -54,9 +54,12 @@ cp .env.example .env
 docker compose --profile full up -d
 
 # 4. Apply migrations and seed demo data
+#    (db:migrate runs `prisma generate` + `prisma migrate deploy` together;
+#     db:seed also runs `prisma generate` first as a safety net since pnpm v8+
+#     blocks postinstall scripts that would normally do it.)
 cd api
 pnpm install
-pnpm dlx prisma migrate deploy
+pnpm db:migrate
 pnpm db:seed
 cd ..
 
