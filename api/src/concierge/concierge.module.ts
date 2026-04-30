@@ -6,16 +6,19 @@ import { ConciergeService } from './concierge.service';
 import { ConciergeController } from './concierge.controller';
 import { ConversationsRepository } from './conversations.repository';
 import { AttendeeThrottlerGuard } from './guards/attendee-throttler.guard';
+import { FeedbackService } from './feedback.service';
+import { FeedbackController } from './feedback.controller';
 
 @Module({
   imports: [LlmModule, AttendeesModule],
-  controllers: [ConciergeController],
+  controllers: [ConciergeController, FeedbackController],
   providers: [
     ToolExecutorService,
     ConciergeService,
     ConversationsRepository,
     AttendeeThrottlerGuard,
+    FeedbackService,
   ],
-  exports: [ToolExecutorService, ConciergeService],
+  exports: [ToolExecutorService, ConciergeService, FeedbackService],
 })
 export class ConciergeModule {}
