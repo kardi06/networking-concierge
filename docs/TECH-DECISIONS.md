@@ -1,6 +1,6 @@
 # Tech Decisions Log
 
-Running log of non-trivial technical decisions made while building the MyConnect networking concierge. Each entry follows the same template: problem → choice → rejected alternatives → trade-off. The goal is twofold: explain "why this code looks like this" to reviewers, and let future-me reconstruct the reasoning months from now.
+Running log of non-trivial technical decisions made while building the networking concierge. Each entry follows the same template: problem → choice → rejected alternatives → trade-off. The goal is twofold: explain "why this code looks like this" to reviewers, and let future-me reconstruct the reasoning months from now.
 
 > Strategic stack decisions (NestJS, Prisma, pgvector, Anthropic, OpenAI embeddings, FastAPI score-service) are explained in [`ARCHITECTURE.md`](ARCHITECTURE.md). This file captures the smaller execution-time calls that surfaced as the implementation progressed.
 

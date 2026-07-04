@@ -1,5 +1,5 @@
 # Product Requirements Document
-## MyConnect AI Networking Concierge
+## AI Networking Concierge
 
 **Version:** 1.1
 **Author:** Kardi Ibrahim
@@ -30,7 +30,7 @@ The original §4.1 latency target (p95 < 8 s for the concierge endpoint) is reta
 ## 1. Overview
 
 ### 1.1 Product Summary
-MyConnect AI Networking Concierge is a backend service that helps conference attendees find relevant connections through natural-language conversation with an AI agent. The agent understands attendee intent, retrieves matching candidates, produces structured scoring with reasoning, and drafts personalized intro messages ready to send.
+AI Networking Concierge is a backend service that helps conference attendees find relevant connections through natural-language conversation with an AI agent. The agent understands attendee intent, retrieves matching candidates, produces structured scoring with reasoning, and drafts personalized intro messages ready to send.
 
 ### 1.2 Problem Statement
 At networking conferences, attendees often struggle to:

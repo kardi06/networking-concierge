@@ -1,4 +1,4 @@
-// MyConnect Networking Concierge — Prisma schema
+// AI Networking Concierge — Prisma schema
 // See docs/ARCHITECTURE.md §3 for the data model rationale.
 
 generator client {

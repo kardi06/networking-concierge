@@ -1,5 +1,5 @@
 # Architecture Document
-## MyConnect AI Networking Concierge
+## AI Networking Concierge
 
 **Version:** 1.1
 **Author:** Kardi Ibrahim

@@ -8,7 +8,7 @@ This document captures how the work was decomposed and executed, and maps every 
 
 ## 1. Acceptance Matrix
 
-Every clause from the take-home brief mapped to the phase that implemented it. "Brief" here refers to the take-home PDF you sent (`MyConnect.ai take-home task.pdf`), not to my own `PRD.md` — the two have different section numbers, and the table below uses the brief's numbering throughout.
+Every clause from the take-home brief mapped to the phase that implemented it. "Brief" here refers to the original task PDF, not to my own `PRD.md` — the two have different section numbers, and the table below uses the brief's numbering throughout.
 
 ### Functional requirements (Brief §2)
 

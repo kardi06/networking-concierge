@@ -1,5 +1,5 @@
 # =============================================================================
-# MyConnect Networking Concierge — local development stack
+# AI Networking Concierge — local development stack
 #
 # Profiles:
 #   (default)  postgres only          — `docker compose up -d`

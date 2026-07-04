@@ -63,7 +63,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(
-    title="MyConnect score-service",
+    title="score-service",
     version="0.1.0",
     lifespan=lifespan,
 )

@@ -1,4 +1,4 @@
-# MyConnect.ai — Networking Concierge
+# AI Networking Concierge
 
 A backend service that lets a conference attendee chat with an AI concierge to get ranked, reasoned matches with other attendees at the same event, plus drafted intro messages they can send.
 

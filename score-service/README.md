@@ -1,6 +1,6 @@
-# MyConnect score-service
+# score-service
 
-FastAPI microservice that backs the `score_match` tool of the MyConnect concierge agent.
+FastAPI microservice that backs the `score_match` tool of the concierge agent.
 Given a requester and a candidate attendee profile plus the requester's intent, it returns a structured score (0–100), a rationale (≤200 chars), and the concrete shared ground between the two.
 
 ## Why a separate service
