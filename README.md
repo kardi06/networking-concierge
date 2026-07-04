@@ -2,7 +2,7 @@
 
 A backend service that lets a conference attendee chat with an AI concierge to get ranked, reasoned matches with other attendees at the same event, plus drafted intro messages they can send.
 
-> **Status:** take-home submission for MyConnect.ai Senior Backend Engineer (AI Focus).
+> **Status:** a networking-concierge project I built.
 > Written by **Kardi Ibrahim**.
 > A 5–8 minute walkthrough video is provided separately in the submission email.
 
