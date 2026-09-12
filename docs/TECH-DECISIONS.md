@@ -239,3 +239,52 @@ A complementary `.dockerignore` skips `node_modules` from the Docker build conte
 
 ### README addition
 > "If `pnpm install` fails on a fresh clone (typical when an existing pnpm cache from a different project conflicts), run `rm -rf node_modules && pnpm install`. The repo uses `node-linker=hoisted` (see `api/.npmrc`) for Prisma 7 compatibility."
+
+---
+
+## TD-008 — Pin `@nestjs/swagger` to v11 (CommonJS) rather than the ESM-only v12
+
+**Date:** 2026-09-12 · **Phase:** post-v1, public demo work · **Files:** `api/package.json`
+
+### Problem
+Adding OpenAPI support meant decorating the controllers, which pulls `@nestjs/swagger` into `AppModule`'s import graph. `pnpm add @nestjs/swagger` resolved to **12.0.1**. Unit tests stayed green, but the entire e2e suite stopped even parsing:
+
+```
+node_modules/@nestjs/swagger/dist/index.js:1
+import 'reflect-metadata';
+^^^^^^
+SyntaxError: Cannot use import statement outside a module
+
+  at Object.<anonymous> (../src/health/health.controller.ts:3:1)
+  at Object.<anonymous> (../src/health/health.module.ts:2:1)
+  at Object.<anonymous> (../src/app.module.ts:7:1)
+```
+
+### Root cause
+This is [TD-001](#td-001--drop-the-uuid-package-use-nodes-cryptorandomuuid-for-request-ids) a second time. `@nestjs/swagger@12` ships **ESM-only**; v11 ships dual CommonJS + ESM. Jest's transform pipeline treats `node_modules` as CommonJS and skips transformation, so requiring an ESM-only entry point throws at parse time.
+
+The blast radius differed from TD-001 in an instructive way. Unit tests passed throughout, because the spec files exercise services and never import a controller. Only the e2e suites boot `AppModule`, and they fail as a whole — 0 tests run, not 1 test failed. **The 53 green unit tests were not evidence of anything here.**
+
+Worth noting: the production image would likely have run fine, since Node 22.12+ allows `require()` of ESM without top-level await. Passing CI is not the only reason to avoid v12 — a production image that boots only because of that interop allowance, sitting on top of a CommonJS test suite that cannot load the same module, is a split we would have to keep in our heads forever.
+
+### Decision
+Pin to `@nestjs/swagger@^11.2.0`, the canonical pairing for NestJS 11. Every API we use — `DocumentBuilder`, `SwaggerModule.createDocument`, `ApiProperty`, `ApiOperation`, `ApiBody` with named examples — exists unchanged in v11. **Zero application code changed.**
+
+### Rejected alternatives
+
+| Option | Why not |
+|---|---|
+| Keep v12, add `transformIgnorePatterns` for `@nestjs/swagger` | Requires ts-jest to transform JavaScript inside `node_modules`, which means enabling `allowJs` and widening the transform surface for every suite. Trades one dependency line for permanent test-config fragility, and recurs for the next ESM-only package. |
+| Keep v12, migrate the test suite to Vitest | Native ESM and faster, but a test-runner migration is a far larger change than the feature that prompted it. Still the right long-term answer if more of the ecosystem goes ESM-only. |
+| Convert the project to ESM | Same verdict as TD-001: touches `tsconfig`, `ts-jest`, eslint and decorator emit. Disproportionate. |
+| Drop `@nestjs/swagger`, hand-write the OpenAPI document | Removes the dependency, but the spec would then drift from the DTOs the moment anyone edits a validator. The decorators are precisely what keeps the documented contract honest. |
+
+### Trade-off
+- ✅ e2e suite loads and passes again (4/4), with no change to application code.
+- ✅ Whole toolchain — build, tests, production image — stays uniformly CommonJS.
+- ✅ v11 is actively maintained alongside NestJS 11.
+- ⚠️ We are a major version behind, and will have to make this jump when the test suite moves to ESM or Vitest.
+- ⚠️ `@scalar/nestjs-api-reference` is itself ESM-only. It is tolerable today because only `main.ts` imports it — never `AppModule` — so it stays outside the Jest graph entirely. If a test ever needs to boot the full HTTP bootstrap, this is the first thing that will break.
+
+### Lesson recorded
+Any dependency imported by a **controller** or **module** lands in the e2e graph; one imported only by `main.ts` does not. When adding a dependency to this repo, run `pnpm test:e2e` — not just `pnpm test` — before believing it works.
