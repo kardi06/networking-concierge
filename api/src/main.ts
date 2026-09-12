@@ -3,6 +3,7 @@ import { Logger as PinoLogger } from 'nestjs-pino';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
+import { setupOpenApi } from './common/swagger/setup-swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
@@ -20,6 +21,11 @@ async function bootstrap() {
   );
 
   const config = app.get(ConfigService);
+
+  // `/docs` is the UI for this service — there is no frontend, so the API
+  // reference is the front door. Mounted before listen so it is live on boot.
+  setupOpenApi(app, config.get<string>('PUBLIC_BASE_URL'));
+
   const port = config.get<number>('PORT') ?? 3000;
   await app.listen(port);
 }

@@ -19,4 +19,9 @@ export const envValidationSchema = Joi.object({
   SCORE_SERVICE_URL: Joi.string().uri().default('http://localhost:8000'),
 
   RATE_LIMIT_PER_MIN: Joi.number().integer().min(1).default(10),
+
+  // Externally reachable origin of this API, e.g. https://myconnect.up.railway.app.
+  // Only used to add a "Public demo" server entry to the OpenAPI document so the
+  // "Test Request" button in /docs targets the deployment instead of localhost.
+  PUBLIC_BASE_URL: Joi.string().uri().optional(),
 });

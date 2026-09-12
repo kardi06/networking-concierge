@@ -12,6 +12,10 @@ import {
   ConversationsRepository,
   MessageWithToolCalls,
 } from './conversations.repository';
+import {
+  ConciergeMatchDto,
+  ConciergeResponseDto,
+} from './dto/concierge-response.dto';
 import { CONCIERGE_SYSTEM_PROMPT } from './prompts/system-prompt';
 import { ALL_TOOLS } from './tools/tool-schemas';
 import { sanitizeContent } from './security/sanitizer';
@@ -22,20 +26,11 @@ const MAX_ITERATIONS = 6;
 // the agent loop into a background queue (BullMQ) and stream results.
 const HANDLER_TIMEOUT_MS = 90_000;
 
-export interface ConciergeMatch {
-  attendee_id: string;
-  name: string;
-  score: number;
-  rationale: string;
-  shared_ground: string[];
-  draft_intro?: string;
-}
-
-export interface ConciergeResponse {
-  message_id: string;
-  reply: string;
-  matches: ConciergeMatch[];
-}
+// The response shape lives with the OpenAPI decorators so the documented
+// contract and the returned object cannot drift apart. These aliases keep the
+// service's own vocabulary intact.
+export type ConciergeMatch = ConciergeMatchDto;
+export type ConciergeResponse = ConciergeResponseDto;
 
 interface TurnToolCall {
   tool: string;
