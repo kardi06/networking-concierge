@@ -1,0 +1,148 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A new push to the same branch cancels the in-flight run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # NestJS API — lint, type-check, build, unit tests, e2e against real Postgres.
+  # ---------------------------------------------------------------------------
+  api:
+    name: API (NestJS)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+
+    services:
+      postgres:
+        # Same image as docker-compose so the `vector` extension is available
+        # for the migration that runs in the e2e setup step.
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: myconnect
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d myconnect"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/myconnect?schema=public
+      # The e2e suite stubs LlmService and ToolExecutorService, but AppModule's
+      # Joi schema still requires these to be present and >=10 chars.
+      ANTHROPIC_API_KEY: sk-ant-ci-placeholder-key
+      OPENAI_API_KEY: sk-ci-placeholder-key
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.22.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: api/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # pnpm v8+ blocks postinstall scripts, so the Prisma client is not
+      # generated automatically — every downstream step needs it.
+      - name: Generate Prisma client
+        run: pnpm exec prisma generate
+
+      # `pnpm lint` carries --fix, which would mask problems in CI. Run eslint
+      # directly in check-only mode instead.
+      - name: Lint
+        run: pnpm exec eslint "{src,apps,libs,test}/**/*.ts" --max-warnings 0
+
+      - name: Type-check
+        run: pnpm exec tsc --noEmit
+
+      - name: Build
+        run: pnpm build
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Create + migrate test database
+        run: pnpm db:test:setup
+
+      - name: E2E tests
+        run: pnpm test:e2e
+
+  # ---------------------------------------------------------------------------
+  # FastAPI score-service — pytest.
+  # ---------------------------------------------------------------------------
+  score-service:
+    name: Score service (FastAPI)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: score-service
+
+    env:
+      ANTHROPIC_API_KEY: sk-ant-ci-placeholder-key
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: score-service/uv.lock
+
+      - name: Sync dependencies
+        run: uv sync --frozen
+
+      - name: Tests
+        run: uv run pytest -v
+
+  # ---------------------------------------------------------------------------
+  # Both Dockerfiles must still build. Cheap insurance against a broken
+  # `docker compose up` in the Quick Start.
+  # ---------------------------------------------------------------------------
+  docker:
+    name: Docker images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build API image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./api
+          push: false
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      - name: Build score-service image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./score-service
+          push: false
+          cache-from: type=gha,scope=score
+          cache-to: type=gha,mode=max,scope=score
