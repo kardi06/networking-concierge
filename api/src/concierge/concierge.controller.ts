@@ -6,7 +6,6 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { Throttle } from '@nestjs/throttler';
 import {
   ApiBadRequestResponse,
   ApiBody,
@@ -21,6 +20,7 @@ import { ConciergeService } from './concierge.service';
 import { SendMessageDto } from './dto/send-message.dto';
 import { ConciergeResponseDto } from './dto/concierge-response.dto';
 import { AttendeeThrottlerGuard } from './guards/attendee-throttler.guard';
+import { DemoBudgetGuard } from './budget/demo-budget.guard';
 
 @ApiTags('Concierge')
 @ApiParam({
@@ -33,8 +33,11 @@ export class ConciergeController {
   constructor(private readonly concierge: ConciergeService) {}
 
   @Post()
-  @UseGuards(AttendeeThrottlerGuard)
-  @Throttle({ default: { ttl: 60_000, limit: 10 } })
+  // Throttle first (in-memory, cheap), then the budget check (one COUNT).
+  // Neither is decorated with a hard-coded limit: the burst rate comes from
+  // RATE_LIMIT_PER_MIN and the daily ceiling from DEMO_DAILY_TURN_LIMIT, so a
+  // public deployment can tighten both without a code change.
+  @UseGuards(AttendeeThrottlerGuard, DemoBudgetGuard)
   @ApiOperation({
     summary: 'Talk to the AI concierge',
     description: [
@@ -96,7 +99,16 @@ export class ConciergeController {
   @ApiCreatedResponse({ type: ConciergeResponseDto })
   @ApiBadRequestResponse({ type: ErrorResponseDto })
   @ApiTooManyRequestsResponse({
-    description: 'More than 10 messages in a minute from this attendee.',
+    description: [
+      'Two different ceilings return 429, distinguished by the `error` field:',
+      '',
+      '- `ThrottlerException` — burst limit, `RATE_LIMIT_PER_MIN` messages a minute from this attendee.',
+      '- `DemoBudgetExhausted` — the public demo has spent its daily turn budget. `X-Demo-Budget-Limit`,',
+      '  `X-Demo-Budget-Remaining` and `X-Demo-Budget-Reset` are on every response so you can see the',
+      '  remaining allowance before you hit it, and `Retry-After` tells you how long until it resets.',
+      '',
+      'Neither cap exists when you run the project locally.',
+    ].join('\n'),
     type: ErrorResponseDto,
   })
   send(

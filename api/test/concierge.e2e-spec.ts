@@ -13,6 +13,10 @@ import {
 import { EmbeddingService } from './../src/embedding/embedding.service';
 import { MockEmbeddingService } from './../src/embedding/mock-embedding.service';
 import { PrismaService } from './../src/prisma/prisma.service';
+import {
+  BudgetSnapshot,
+  DemoBudgetService,
+} from './../src/concierge/budget/demo-budget.service';
 
 import {
   createEvent,
@@ -36,16 +40,36 @@ interface ToolStub {
     input: Record<string, unknown>;
   }>;
 }
+/**
+ * The real DemoBudgetService reads its ceilings from env, which are 0 (uncapped)
+ * in test. Stubbing it lets a single test drive the exhausted branch without
+ * making every other test run against a live counter.
+ */
+interface BudgetStub {
+  enabled: boolean;
+  snapshot: BudgetSnapshot;
+}
+
+const UNCAPPED: BudgetSnapshot = {
+  globalUsed: 0,
+  globalLimit: 0,
+  attendeeUsed: 0,
+  attendeeLimit: 0,
+  resetsAt: new Date('2026-09-14T00:00:00.000Z'),
+  exceeded: null,
+};
 
 describe('Concierge (e2e)', () => {
   let app: INestApplication;
   let llmStub: LlmStub;
   let toolStub: ToolStub;
+  let budgetStub: BudgetStub;
   let prisma: PrismaService;
 
   beforeAll(async () => {
     llmStub = { scriptedResponses: [], observed: [] };
     toolStub = { scriptedResults: [], observed: [] };
+    budgetStub = { enabled: false, snapshot: UNCAPPED };
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -83,6 +107,13 @@ describe('Concierge (e2e)', () => {
       })
       .overrideProvider(EmbeddingService)
       .useClass(MockEmbeddingService)
+      .overrideProvider(DemoBudgetService)
+      .useValue({
+        get enabled() {
+          return budgetStub.enabled;
+        },
+        snapshot: jest.fn(() => Promise.resolve(budgetStub.snapshot)),
+      })
       .compile();
 
     app = moduleFixture.createNestApplication({ bufferLogs: true });
@@ -113,6 +144,8 @@ describe('Concierge (e2e)', () => {
     llmStub.observed = [];
     toolStub.scriptedResults = [];
     toolStub.observed = [];
+    budgetStub.enabled = false;
+    budgetStub.snapshot = UNCAPPED;
   });
 
   // ---------------------------------------------------------------------------
@@ -280,5 +313,73 @@ describe('Concierge (e2e)', () => {
         ? userMsg.content
         : JSON.stringify(userMsg?.content);
     expect(userText).not.toMatch(/\[\/?INST\]/);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Test 4: the daily demo budget refuses the turn before any spend occurs
+  // ---------------------------------------------------------------------------
+  it('refuses a concierge turn once the daily demo budget is spent', async () => {
+    const event = await createEvent(app);
+    const requester = await createAttendee(app, event.id, { name: 'R' });
+
+    budgetStub.enabled = true;
+    budgetStub.snapshot = {
+      globalUsed: 200,
+      globalLimit: 200,
+      attendeeUsed: 3,
+      attendeeLimit: 5,
+      resetsAt: new Date('2026-09-14T00:00:00.000Z'),
+      exceeded: 'global',
+    };
+    // Scripted anyway — if the guard leaked, the loop would consume this and
+    // the assertions below would catch it.
+    llmStub.scriptedResponses = [llmTextResponse('should never be reached')];
+
+    const res = await request(app.getHttpServer() as App)
+      .post(`/events/${event.id}/concierge/messages`)
+      .send({ attendee_id: requester.id, message: 'who should I meet?' })
+      .expect(429);
+
+    // 429 alone is ambiguous — the burst throttler returns one too. `error` is
+    // what tells the two apart.
+    const body = res.body as { error: string; message: string };
+    expect(body.error).toBe('DemoBudgetExhausted');
+    expect(body.message).toContain('2026-09-14T00:00:00.000Z');
+
+    expect(res.headers['x-demo-budget-remaining']).toBe('0');
+    expect(Number(res.headers['retry-after'])).toBeGreaterThan(0);
+
+    // The whole point of the guard: nothing was spent and nothing was written.
+    expect(llmStub.observed).toHaveLength(0);
+    expect(toolStub.observed).toHaveLength(0);
+    const persisted = await prisma.message.count();
+    expect(persisted).toBe(0);
+  });
+
+  it('lets the turn through while the budget still has room', async () => {
+    const event = await createEvent(app);
+    const requester = await createAttendee(app, event.id, { name: 'R' });
+
+    budgetStub.enabled = true;
+    budgetStub.snapshot = {
+      globalUsed: 199,
+      globalLimit: 200,
+      attendeeUsed: 1,
+      attendeeLimit: 5,
+      resetsAt: new Date('2026-09-14T00:00:00.000Z'),
+      exceeded: null,
+    };
+    llmStub.scriptedResponses = [llmTextResponse('a reply')];
+
+    const res = await request(app.getHttpServer() as App)
+      .post(`/events/${event.id}/concierge/messages`)
+      .send({ attendee_id: requester.id, message: 'who should I meet?' })
+      .expect(201);
+
+    // The remaining allowance rides along on a successful response too, so a
+    // client can see the wall coming instead of discovering it on a 429.
+    expect(res.headers['x-demo-budget-remaining']).toBe('1');
+    expect(res.headers['x-demo-attendee-budget-remaining']).toBe('4');
+    expect(llmStub.observed).toHaveLength(1);
   });
 });

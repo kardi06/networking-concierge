@@ -6,6 +6,8 @@ import { ConciergeService } from './concierge.service';
 import { ConciergeController } from './concierge.controller';
 import { ConversationsRepository } from './conversations.repository';
 import { AttendeeThrottlerGuard } from './guards/attendee-throttler.guard';
+import { DemoBudgetService } from './budget/demo-budget.service';
+import { DemoBudgetGuard } from './budget/demo-budget.guard';
 import { FeedbackService } from './feedback.service';
 import { FeedbackController } from './feedback.controller';
 
@@ -17,6 +19,8 @@ import { FeedbackController } from './feedback.controller';
     ConciergeService,
     ConversationsRepository,
     AttendeeThrottlerGuard,
+    DemoBudgetService,
+    DemoBudgetGuard,
     FeedbackService,
   ],
   exports: [ToolExecutorService, ConciergeService, FeedbackService],
