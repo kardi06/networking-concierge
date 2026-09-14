@@ -4,10 +4,7 @@ import { PinoLogger } from 'nestjs-pino';
 import { Prisma } from '@prisma/client';
 
 import { LlmService } from '../llm/llm.service';
-import {
-  ToolExecutorService,
-  ToolExecutionResult,
-} from './tools/tool-executor.service';
+import { ToolExecutorService } from './tools/tool-executor.service';
 import {
   ConversationsRepository,
   MessageWithToolCalls,
@@ -15,6 +12,9 @@ import {
 import {
   ConciergeMatchDto,
   ConciergeResponseDto,
+  ConciergeTraceDto,
+  TraceIterationDto,
+  TraceToolCallDto,
 } from './dto/concierge-response.dto';
 import { CONCIERGE_SYSTEM_PROMPT } from './prompts/system-prompt';
 import { ALL_TOOLS } from './tools/tool-schemas';
@@ -31,12 +31,6 @@ const HANDLER_TIMEOUT_MS = 90_000;
 // service's own vocabulary intact.
 export type ConciergeMatch = ConciergeMatchDto;
 export type ConciergeResponse = ConciergeResponseDto;
-
-interface TurnToolCall {
-  tool: string;
-  input: Record<string, unknown>;
-  output: ToolExecutionResult;
-}
 
 @Injectable()
 export class ConciergeService {
@@ -93,17 +87,22 @@ export class ConciergeService {
     const history = await this.repo.loadHistory(conversation.id);
     const messages = this.reconstructMessages(history);
 
-    const turnToolCalls: TurnToolCall[] = [];
+    // The trace is the single record of what happened this turn: `matches` is
+    // derived from it below, rather than from a parallel list kept in step.
+    const iterations: TraceIterationDto[] = [];
+    const loopStart = Date.now();
     let lastReply = '';
     let lastAssistantMessageId = '';
 
     for (let i = 0; i < MAX_ITERATIONS; i++) {
+      const llmStart = Date.now();
       const response = await this.llm.createMessage({
         system: CONCIERGE_SYSTEM_PROMPT,
         messages,
         tools: ALL_TOOLS,
         iterationIndex: i,
       });
+      const llmLatencyMs = Date.now() - llmStart;
 
       const assistantMsg = await this.repo.appendMessage({
         conversationId: conversation.id,
@@ -128,7 +127,19 @@ export class ConciergeService {
       for (const block of response.content) {
         if (block.type === 'text') textPieces.push(block.text);
       }
-      if (textPieces.length > 0) lastReply = textPieces.join(' ').trim();
+      const text = textPieces.length > 0 ? textPieces.join(' ').trim() : null;
+      if (text !== null) lastReply = text;
+
+      const iteration: TraceIterationDto = {
+        index: i,
+        stop_reason: response.stop_reason,
+        text,
+        input_tokens: response.usage.input_tokens,
+        output_tokens: response.usage.output_tokens,
+        latency_ms: llmLatencyMs,
+        tool_calls: [],
+      };
+      iterations.push(iteration);
 
       if (response.stop_reason !== 'tool_use') break;
 
@@ -155,10 +166,15 @@ export class ConciergeService {
           latencyMs,
         });
 
-        turnToolCalls.push({
+        // ToolExecutionResult is success XOR failure; keep it that way on the
+        // wire so a client never sees `output: null` sitting beside an error.
+        iteration.tool_calls.push({
           tool: block.name,
           input: block.input as Record<string, unknown>,
-          output: result,
+          latency_ms: latencyMs,
+          ...(result.error !== undefined
+            ? { error: result.error }
+            : { output: result.result }),
         });
 
         toolResultBlocks.push({
@@ -180,7 +196,17 @@ export class ConciergeService {
       messages.push({ role: 'user', content: toolResultBlocks });
     }
 
-    const matches = this.extractMatches(turnToolCalls);
+    const toolCalls = iterations.flatMap((it) => it.tool_calls);
+    const trace: ConciergeTraceDto = {
+      iterations,
+      input_tokens: iterations.reduce((sum, it) => sum + it.input_tokens, 0),
+      output_tokens: iterations.reduce((sum, it) => sum + it.output_tokens, 0),
+      latency_ms: Date.now() - loopStart,
+      hit_iteration_cap:
+        iterations.length === MAX_ITERATIONS &&
+        iterations[iterations.length - 1].stop_reason === 'tool_use',
+    };
+    const matches = this.extractMatches(toolCalls);
 
     this.logger.info(
       {
@@ -189,7 +215,10 @@ export class ConciergeService {
         conversation_id: conversation.id,
         message_id: lastAssistantMessageId,
         matches_count: matches.length,
-        tool_calls_count: turnToolCalls.length,
+        tool_calls_count: toolCalls.length,
+        input_tokens: trace.input_tokens,
+        output_tokens: trace.output_tokens,
+        hit_iteration_cap: trace.hit_iteration_cap,
       },
       'concierge turn complete',
     );
@@ -198,6 +227,7 @@ export class ConciergeService {
       message_id: lastAssistantMessageId,
       reply: lastReply,
       matches,
+      trace,
     };
   }
 
@@ -235,12 +265,12 @@ export class ConciergeService {
     return out;
   }
 
-  private extractMatches(turnToolCalls: TurnToolCall[]): ConciergeMatch[] {
+  private extractMatches(toolCalls: TraceToolCallDto[]): ConciergeMatch[] {
     const byId = new Map<string, Partial<ConciergeMatch>>();
 
-    for (const call of turnToolCalls) {
-      if (call.tool === 'search_attendees' && call.output.result) {
-        const r = call.output.result as {
+    for (const call of toolCalls) {
+      if (call.tool === 'search_attendees' && call.output) {
+        const r = call.output as {
           candidates?: Array<{ attendee_id: string; name: string }>;
         };
         for (const c of r.candidates ?? []) {
@@ -254,11 +284,11 @@ export class ConciergeService {
       }
     }
 
-    for (const call of turnToolCalls) {
-      if (call.tool === 'score_match' && call.output.result) {
+    for (const call of toolCalls) {
+      if (call.tool === 'score_match' && call.output) {
         const id = call.input.candidate_attendee_id;
         if (typeof id !== 'string') continue;
-        const r = call.output.result as {
+        const r = call.output as {
           score?: number;
           rationale?: string;
           shared_ground?: string[];
@@ -273,11 +303,11 @@ export class ConciergeService {
       }
     }
 
-    for (const call of turnToolCalls) {
-      if (call.tool === 'draft_intro_message' && call.output.result) {
+    for (const call of toolCalls) {
+      if (call.tool === 'draft_intro_message' && call.output) {
         const id = call.input.to_attendee_id;
         if (typeof id !== 'string') continue;
-        const r = call.output.result as { message?: string };
+        const r = call.output as { message?: string };
         const existing = byId.get(id) ?? { attendee_id: id };
         byId.set(id, { ...existing, draft_intro: r.message });
       }

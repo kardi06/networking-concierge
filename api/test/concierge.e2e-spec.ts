@@ -236,6 +236,28 @@ describe('Concierge (e2e)', () => {
     expect(body.matches[0].score).toBe(92);
     expect(body.matches[0].draft_intro).toContain(sarah.name);
 
+    // The trace survives HTTP serialisation intact: the chain the model drove,
+    // in order, with each tool's real output attached.
+    const { trace } = res.body as {
+      trace: {
+        iterations: Array<{
+          stop_reason: string;
+          tool_calls: Array<{ tool: string; output?: unknown; error?: string }>;
+        }>;
+        hit_iteration_cap: boolean;
+      };
+    };
+    expect(
+      trace.iterations.flatMap((it) => it.tool_calls.map((c) => c.tool)),
+    ).toEqual(['search_attendees', 'score_match', 'draft_intro_message']);
+    expect(trace.iterations[1].tool_calls[0].output).toMatchObject({
+      score: 92,
+    });
+    expect(trace.iterations[trace.iterations.length - 1].stop_reason).toBe(
+      'end_turn',
+    );
+    expect(trace.hit_iteration_cap).toBe(false);
+
     // DB assertions: messages + tool_calls populated.
     const messageCount = await prisma.message.count();
     expect(messageCount).toBeGreaterThanOrEqual(5); // user + 4 assistant + tool_results

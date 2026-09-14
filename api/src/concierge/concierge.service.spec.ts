@@ -159,6 +159,68 @@ describe('ConciergeService', () => {
       draft_intro: 'Hi Sarah — saw LedgerAI…',
     });
     expect(toolExecutor.dispatch).toHaveBeenCalledTimes(3);
+
+    const { trace } = result;
+    expect(trace.iterations.map((it) => it.stop_reason)).toEqual([
+      'tool_use',
+      'tool_use',
+      'tool_use',
+      'end_turn',
+    ]);
+    expect(
+      trace.iterations.map((it) => it.tool_calls.map((c) => c.tool)),
+    ).toEqual([
+      ['search_attendees'],
+      ['score_match'],
+      ['draft_intro_message'],
+      [],
+    ]);
+    expect(trace.iterations[1].tool_calls[0]).toMatchObject({
+      input: { candidate_attendee_id: 'cand-1', intent: 'find AI cofounder' },
+      output: { score: 92, rationale: 'NestJS overlap' },
+    });
+    // Tool-only iterations carry no text; the final one carries the reply.
+    expect(trace.iterations[0].text).toBeNull();
+    expect(trace.iterations[3].text).toBe(
+      'Here is your top match: Sarah from LedgerAI.',
+    );
+    expect(trace.input_tokens).toBe(10 + 12 + 14 + 16);
+    expect(trace.output_tokens).toBe(4 + 4 + 4 + 8);
+    expect(trace.hit_iteration_cap).toBe(false);
+  });
+
+  it('trace: reports failed tools as error-only and flags the iteration cap', async () => {
+    // A model that never stops asking for a tool that never succeeds.
+    llm.createMessage.mockResolvedValue({
+      content: [
+        {
+          type: 'tool_use',
+          id: 'tu-x',
+          name: 'score_match',
+          input: { candidate_attendee_id: 'ghost', intent: 'anything' },
+        },
+      ],
+      stop_reason: 'tool_use',
+      usage: { input_tokens: 1, output_tokens: 1 },
+      model: 'claude',
+    });
+    toolExecutor.dispatch.mockResolvedValue({
+      error: 'candidate ghost not found',
+    });
+
+    const result = await service.handleMessage('event-1', 'att-1', 'hello');
+
+    expect(llm.createMessage).toHaveBeenCalledTimes(6);
+    expect(result.trace.iterations).toHaveLength(6);
+    expect(result.trace.hit_iteration_cap).toBe(true);
+
+    const call = result.trace.iterations[0].tool_calls[0];
+    expect(call.error).toBe('candidate ghost not found');
+    // Success and failure are exclusive — no `output: undefined` key either.
+    expect(call).not.toHaveProperty('output');
+
+    expect(result.trace.input_tokens).toBe(6);
+    expect(result.matches).toEqual([]);
   });
 
   it('extractMatches: sorts by score descending and keeps only scored candidates', async () => {
