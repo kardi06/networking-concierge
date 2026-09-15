@@ -12,6 +12,7 @@ import { AttendeesModule } from './attendees/attendees.module';
 import { LlmModule } from './llm/llm.module';
 import { ConciergeModule } from './concierge/concierge.module';
 import { MetricsModule } from './common/metrics/metrics.module';
+import { DemoModule } from './demo/demo.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 @Module({
@@ -47,6 +48,7 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
     EventsModule,
     AttendeesModule,
     ConciergeModule,
+    DemoModule,
   ],
   providers: [
     {
