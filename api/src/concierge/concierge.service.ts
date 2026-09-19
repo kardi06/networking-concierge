@@ -198,6 +198,9 @@ export class ConciergeService {
 
     const toolCalls = iterations.flatMap((it) => it.tool_calls);
     const trace: ConciergeTraceDto = {
+      // The same string that was persisted and placed in the model's context,
+      // not a re-sanitised copy — so what the client sees is what the model saw.
+      sanitized_message: userText,
       iterations,
       input_tokens: iterations.reduce((sum, it) => sum + it.input_tokens, 0),
       output_tokens: iterations.reduce((sum, it) => sum + it.output_tokens, 0),
