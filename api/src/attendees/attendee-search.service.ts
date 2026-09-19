@@ -60,6 +60,12 @@ export class AttendeeSearchService {
 
     const conditions: Prisma.Sql[] = [
       Prisma.sql`event_id = ${input.eventId}::uuid`,
+      // Without this, a NULL embedding makes `<=>` yield NULL, which Number()
+      // below turns into 0 — reported to the model as a perfect 1.0 similarity.
+      // A row with no vector cannot be ranked semantically, so it is excluded
+      // rather than presented as an ideal match. Registration embeds before it
+      // inserts, so this only bites rows written some other way.
+      Prisma.sql`embedding IS NOT NULL`,
     ];
     if (input.role) {
       conditions.push(Prisma.sql`role = ${input.role}`);

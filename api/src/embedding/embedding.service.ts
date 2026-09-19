@@ -1,11 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { PinoLogger } from 'nestjs-pino';
 import OpenAI from 'openai';
+import { EMBEDDING_DIMENSIONS, EMBEDDING_MODEL } from './embedding.constants';
 
 export const OPENAI_CLIENT = Symbol('OPENAI_CLIENT');
 
-const MODEL = 'text-embedding-3-small';
-const DIMENSIONS = 1536; // matches the `vector(1536)` column in attendees.embedding
 const TIMEOUT_MS = 5000;
 const MAX_ATTEMPTS = 3;
 
@@ -28,14 +27,18 @@ export class EmbeddingService {
       const start = Date.now();
       try {
         const response = await this.client.embeddings.create(
-          { model: MODEL, input: text, dimensions: DIMENSIONS },
+          {
+            model: EMBEDDING_MODEL,
+            input: text,
+            dimensions: EMBEDDING_DIMENSIONS,
+          },
           { timeout: TIMEOUT_MS },
         );
         const latencyMs = Date.now() - start;
         this.logger.info(
           {
             provider: 'openai',
-            model: MODEL,
+            model: EMBEDDING_MODEL,
             latency_ms: latencyMs,
             tokens: response.usage.total_tokens,
             attempt,
@@ -49,7 +52,7 @@ export class EmbeddingService {
         this.logger.warn(
           {
             provider: 'openai',
-            model: MODEL,
+            model: EMBEDDING_MODEL,
             latency_ms: latencyMs,
             attempt,
             error: err instanceof Error ? err.message : String(err),

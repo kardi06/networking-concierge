@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmbeddingService } from '../embedding/embedding.service';
 import { CreateAttendeeDto } from './dto/create-attendee.dto';
+import { buildEmbeddingSource } from './embedding-source';
 import { ListAttendeesQueryDto } from './dto/list-attendees-query.dto';
 
 export interface PaginatedAttendees {
@@ -28,8 +29,7 @@ export class AttendeesService {
       throw new NotFoundException(`Event ${eventId} not found`);
     }
 
-    const source = `${dto.headline} ${dto.bio} ${dto.skills.join(', ')} ${dto.lookingFor}`;
-    const vector = await this.embedding.embed(source);
+    const vector = await this.embedding.embed(buildEmbeddingSource(dto));
     const vectorLiteral = `[${vector.join(',')}]`;
 
     const id = randomUUID();

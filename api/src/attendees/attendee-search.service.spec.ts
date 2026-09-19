@@ -69,6 +69,26 @@ describe('AttendeeSearchService', () => {
     expect(result.candidates[1].similarity_score).toBeCloseTo(0.6, 5);
   });
 
+  it('excludes attendees without an embedding rather than ranking them as perfect matches', async () => {
+    embedding.embed.mockResolvedValue([0.1]);
+    prisma.$queryRaw.mockResolvedValue([]);
+
+    await service.search({ eventId: 'event-1', query: 'x' });
+
+    // $queryRaw is a tagged template, so the WHERE clause arrives as an
+    // interpolated Prisma.Sql value rather than in the literal strings.
+    const [, ...values] = prisma.$queryRaw.mock.calls[0] as unknown[];
+    const fragments = values
+      .filter(
+        (v): v is { sql: string } =>
+          typeof v === 'object' && v !== null && 'sql' in v,
+      )
+      .map((v) => v.sql);
+    expect(fragments.some((sql) => sql.includes('embedding IS NOT NULL'))).toBe(
+      true,
+    );
+  });
+
   it('truncates bio to 500 chars', async () => {
     embedding.embed.mockResolvedValue([0.1]);
     const longBio = 'x'.repeat(800);

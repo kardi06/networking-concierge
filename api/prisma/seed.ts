@@ -6,6 +6,12 @@ dotenv.config({ path: resolve(__dirname, '..', '..', '.env') });
 
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
+import OpenAI from 'openai';
+import { buildEmbeddingSource } from '../src/attendees/embedding-source';
+import {
+  EMBEDDING_DIMENSIONS,
+  EMBEDDING_MODEL,
+} from '../src/embedding/embedding.constants';
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -191,6 +197,33 @@ const ATTENDEES = [
 ];
 
 async function main() {
+  // Without vectors, search_attendees has nothing to rank: every candidate
+  // would come back in arbitrary order. Refuse rather than seed a demo whose
+  // semantic search silently does nothing.
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error(
+      'OPENAI_API_KEY is required: seeded attendees need embeddings for semantic search to work.',
+    );
+  }
+
+  // Embed first, wipe second — a failed OpenAI call must not leave the
+  // database empty. One batched request covers every profile.
+  console.log(`🌱 Embedding ${ATTENDEES.length} attendee profiles…`);
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const embeddings = await openai.embeddings.create({
+    model: EMBEDDING_MODEL,
+    dimensions: EMBEDDING_DIMENSIONS,
+    // Same recipe as AttendeesService.create, so seeded vectors are directly
+    // comparable with those of attendees registered through the API.
+    input: ATTENDEES.map((a) => buildEmbeddingSource(a)),
+  });
+  const vectors = [...embeddings.data]
+    .sort((x, y) => x.index - y.index)
+    .map((d) => d.embedding);
+  console.log(
+    `   ✓ ${vectors.length} embeddings (${embeddings.usage.total_tokens} tokens)`,
+  );
+
   console.log('🌱 Resetting demo data…');
 
   // Wipe in FK-safe order (cascade also handles this, but explicit is clearer).
@@ -206,12 +239,19 @@ async function main() {
   console.log(`   ✓ ${event.title} (${event.id})`);
 
   console.log(`🌱 Creating ${ATTENDEES.length} attendees…`);
-  for (const a of ATTENDEES) {
-    await prisma.attendee.create({
+  for (const [i, a] of ATTENDEES.entries()) {
+    const attendee = await prisma.attendee.create({
       data: { ...a, eventId: event.id },
     });
+    // `embedding` is an Unsupported column the typed client cannot write, so
+    // it is set with a parameter-bound raw UPDATE, as AttendeesService does.
+    const vectorLiteral = `[${vectors[i].join(',')}]`;
+    await prisma.$executeRaw`
+      UPDATE attendees SET embedding = ${vectorLiteral}::vector
+      WHERE id = ${attendee.id}::uuid
+    `;
   }
-  console.log(`   ✓ ${ATTENDEES.length} attendees created (embeddings will be populated by the API on real registration).`);
+  console.log(`   ✓ ${ATTENDEES.length} attendees created, each with an embedding.`);
 
   console.log('🌱 Done.');
 }
