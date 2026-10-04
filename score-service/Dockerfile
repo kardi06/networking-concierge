@@ -29,9 +29,14 @@ USER appuser
 EXPOSE 8000
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8000/health').status == 200 else sys.exit(1)" \
+    CMD python -c "import os,urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:' + os.environ.get('PORT', '8000') + '/health').status == 200 else sys.exit(1)" \
     || exit 1
 
 # Run uvicorn from the venv directly. `uv run` would need a writable cache dir
 # at $HOME/.cache/uv, which doesn't exist for appuser (--no-create-home).
-CMD [".venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+#
+# HOST and PORT come from the environment so one image serves both targets:
+# docker compose uses the defaults, Railway sets HOST=:: because its private
+# network is IPv6-only in environments created before 16 Oct 2025. The shell
+# form is what expands them; `exec` keeps uvicorn as PID 1 to receive signals.
+CMD ["sh", "-c", "exec .venv/bin/uvicorn app.main:app --host \"${HOST:-0.0.0.0}\" --port \"${PORT:-8000}\""]

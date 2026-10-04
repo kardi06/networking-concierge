@@ -1,12 +1,13 @@
 # =============================================================================
-# AI Networking Concierge — local development stack
+# AI Networking Concierge — local stack
 #
-# Profiles:
-#   (default)  postgres only          — `docker compose up -d`
-#   full       postgres + api + score — `docker compose --profile full up -d`
-#   tools      pgadmin                — `docker compose --profile tools up -d`
-#
-# Combine: `docker compose --profile full --profile tools up -d`
+#   docker compose up -d              postgres + score-service + api. The api
+#                                     container migrates the schema and seeds
+#                                     the demo data on first boot; nothing else
+#                                     to run. Then open http://localhost:3000
+#   docker compose up -d postgres     the database only, for `pnpm start:dev`
+#   docker compose --profile tools up -d pgadmin
+#                                     pgadmin, a dev-only DB browser
 # =============================================================================
 
 services:
@@ -36,7 +37,6 @@ services:
       dockerfile: Dockerfile
     image: myconnect-score-service:local
     container_name: myconnect-score-service
-    profiles: ["full"]
     restart: unless-stopped
     environment:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
@@ -54,7 +54,6 @@ services:
       dockerfile: Dockerfile
     image: myconnect-api:local
     container_name: myconnect-api
-    profiles: ["full"]
     restart: unless-stopped
     environment:
       # Inside the compose network, services reach Postgres as `postgres:5432`.

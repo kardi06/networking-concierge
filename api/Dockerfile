@@ -42,12 +42,33 @@ COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/package.json ./
 COPY --from=build /app/prisma.config.ts ./
 
+# The seed runs under ts-node at boot and imports two small modules from src/:
+# the embedding recipe and model constants. They are the same code the API uses,
+# which is what keeps seeded and registered vectors comparable. tsconfig.json
+# tells ts-node how to compile them.
+COPY --from=build /app/src ./src
+COPY --from=build /app/tsconfig.json ./
+
 # Run as the non-root `node` user that ships with the official image.
 USER node
 
 EXPOSE 3000
 
-HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=3 \
+# start-period covers migrations and, on a fresh database, the seed's one
+# embedding call before the server starts listening.
+HEALTHCHECK --interval=10s --timeout=3s --start-period=60s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/health',(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))" || exit 1
 
-CMD ["node", "dist/main.js"]
+# Boot sequence, identical under `docker compose up` and on Railway:
+#   1. Apply pending migrations. A no-op when the schema is current, and Prisma
+#      holds an advisory lock while migrating.
+#   2. Seed the demo data, but only if the database has no events yet, so a
+#      redeploy never wipes live conversations or the daily budget count. (Two
+#      replicas booting against an empty database at once could both seed; the
+#      demo runs one.)
+#   3. Hand PID 1 to the API.
+# Any step failing stops the chain, so a deployment that cannot migrate or
+# seed never reports healthy, and on Railway the previous one keeps serving.
+# Binaries are called from node_modules/.bin rather than through pnpm, which
+# would try to fetch itself via corepack as the non-root user.
+CMD ["sh", "-c", "node_modules/.bin/prisma migrate deploy && node_modules/.bin/ts-node --transpile-only prisma/seed-if-empty.ts && exec node dist/main.js"]
