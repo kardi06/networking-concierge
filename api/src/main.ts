@@ -11,6 +11,14 @@ async function bootstrap() {
   // Replace the default Nest logger with pino.
   app.useLogger(app.get(PinoLogger));
 
+  // In a container this process is PID 1, and Linux delivers SIGTERM/SIGINT to
+  // PID 1 only if it has installed a handler — otherwise both are ignored.
+  // Without this, Ctrl+C does nothing under `docker compose run`, and every
+  // `docker stop` or Railway redeploy waits out its grace period and then
+  // SIGKILLs the process mid-request. With it, the HTTP server stops accepting
+  // connections and providers run their shutdown hooks (Prisma disconnects).
+  app.enableShutdownHooks();
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
