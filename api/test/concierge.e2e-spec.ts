@@ -409,8 +409,9 @@ describe('Concierge (e2e)', () => {
 
     // The remaining allowance rides along on a successful response too, so a
     // client can see the wall coming instead of discovering it on a 429.
-    expect(res.headers['x-demo-budget-remaining']).toBe('1');
-    expect(res.headers['x-demo-attendee-budget-remaining']).toBe('4');
+    // 199 of 200 used before this turn; this turn takes the last one.
+    expect(res.headers['x-demo-budget-remaining']).toBe('0');
+    expect(res.headers['x-demo-attendee-budget-remaining']).toBe('3');
     expect(llmStub.observed).toHaveLength(1);
   });
 });

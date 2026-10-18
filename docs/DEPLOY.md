@@ -59,12 +59,13 @@ With both caps in place, the worst case is bounded by the smaller of the two lim
    | `OPENAI_API_KEY` | the key from the capped project | Needed at boot: the seed embeds the demo profiles |
    | `SCORE_SERVICE_URL` | `http://${{score-service.RAILWAY_PRIVATE_DOMAIN}}:8000` | The port is required on private URLs |
    | `NODE_ENV` | `production` | |
+   | `PORT` | `3000` | Railway injects its own `PORT` otherwise; pinning it keeps the domain's target port and the app in agreement |
    | `PUBLIC_BASE_URL` | `https://${{RAILWAY_PUBLIC_DOMAIN}}` | Listed as the first server in `/docs`, so "Test Request" hits the live API |
    | `RATE_LIMIT_PER_MIN` | `3` | Burst limit per attendee |
    | `DEMO_DAILY_TURN_LIMIT` | `50` | Turns per UTC day across everyone: worst case ~US$4.50/day |
    | `DEMO_ATTENDEE_DAILY_TURN_LIMIT` | `5` | Stops one visitor from spending the whole day's allowance |
 
-5. **Settings → Networking → Generate Domain.**
+5. **Settings → Networking → Generate Domain**, target port `3000`.
 
 ## 4. Deploy and verify
 

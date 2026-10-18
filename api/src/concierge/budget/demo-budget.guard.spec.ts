@@ -72,9 +72,46 @@ describe('DemoBudgetGuard', () => {
       setHeader.mock.calls as Array<[string, string]>,
     );
     expect(headers['X-Demo-Budget-Limit']).toBe('200');
-    expect(headers['X-Demo-Budget-Remaining']).toBe('190');
+    // 10 used before this turn, plus this turn itself.
+    expect(headers['X-Demo-Budget-Remaining']).toBe('189');
     expect(headers['X-Demo-Budget-Reset']).toBe(RESETS_AT.toISOString());
-    expect(headers['X-Demo-Attendee-Budget-Remaining']).toBe('4');
+    expect(headers['X-Demo-Attendee-Budget-Remaining']).toBe('3');
+  });
+
+  it('reports the last turn as leaving zero, not one', async () => {
+    // Regression: the first live turn on the deployed demo showed
+    // "50 of 50 left" because the request being served was not counted.
+    const guard = makeGuard(true);
+    snapshotFn.mockResolvedValue(
+      snapshot({ globalUsed: 49, globalLimit: 50, exceeded: null }),
+    );
+
+    await expect(
+      guard.canActivate(context({ attendee_id: ATTENDEE })),
+    ).resolves.toBe(true);
+
+    const headers = Object.fromEntries(
+      setHeader.mock.calls as Array<[string, string]>,
+    );
+    expect(headers['X-Demo-Budget-Remaining']).toBe('0');
+  });
+
+  it('does not count a refused request against what remains', async () => {
+    const guard = makeGuard(true);
+    // Global ceiling reached; this attendee has used 3 of 5.
+    snapshotFn.mockResolvedValue(
+      snapshot({ globalUsed: 200, attendeeUsed: 3, exceeded: 'global' }),
+    );
+
+    await expect(
+      guard.canActivate(context({ attendee_id: ATTENDEE })),
+    ).rejects.toBeInstanceOf(HttpException);
+
+    const headers = Object.fromEntries(
+      setHeader.mock.calls as Array<[string, string]>,
+    );
+    expect(headers['X-Demo-Budget-Remaining']).toBe('0');
+    expect(headers['X-Demo-Attendee-Budget-Remaining']).toBe('2');
   });
 
   it('omits headers for a ceiling that is not configured', async () => {

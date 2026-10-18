@@ -87,11 +87,17 @@ export class DemoBudgetGuard implements CanActivate {
   }
 
   private setHeaders(response: Response, snapshot: BudgetSnapshot): void {
+    // The snapshot is taken before this turn runs. A permitted request always
+    // spends one turn — its user message is persisted first, so it counts even
+    // if the turn later fails — and "remaining" follows the X-RateLimit
+    // convention of including it. A refused request spends nothing.
+    const spent = snapshot.exceeded === null ? 1 : 0;
+
     if (snapshot.globalLimit > 0) {
       response.setHeader('X-Demo-Budget-Limit', String(snapshot.globalLimit));
       response.setHeader(
         'X-Demo-Budget-Remaining',
-        String(Math.max(0, snapshot.globalLimit - snapshot.globalUsed)),
+        String(Math.max(0, snapshot.globalLimit - snapshot.globalUsed - spent)),
       );
       response.setHeader(
         'X-Demo-Budget-Reset',
@@ -105,7 +111,9 @@ export class DemoBudgetGuard implements CanActivate {
       );
       response.setHeader(
         'X-Demo-Attendee-Budget-Remaining',
-        String(Math.max(0, snapshot.attendeeLimit - snapshot.attendeeUsed)),
+        String(
+          Math.max(0, snapshot.attendeeLimit - snapshot.attendeeUsed - spent),
+        ),
       );
     }
   }
